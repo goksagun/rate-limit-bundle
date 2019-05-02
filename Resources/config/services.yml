@@ -1,0 +1,4 @@
+services:
+#    rate_limit.example:
+#        class: Goksagun\RateLimitBundle\Example
+#        arguments: ["@service_id", "plain_value", "%parameter%"]

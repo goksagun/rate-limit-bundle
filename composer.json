@@ -1,0 +1,36 @@
+{
+    "name": "goksagun/rate-limit-bundle",
+    "description": "Rate limit bundle",
+    "type": "symfony-bundle",
+    "authors": [
+        {
+            "name": "Burak Bolat",
+            "email": "brkblt@gmail.com"
+        }
+    ],
+    "keywords": [
+        "scheduler task bundle"
+    ],
+    "license": "MIT",
+    "require": {
+        "php": "^7.0",
+        "symfony/framework-bundle": "~2.7|~3.0|~4.0"
+    },
+    "require-dev": {
+        "symfony/phpunit-bridge": "*"
+    },
+    "autoload": {
+        "psr-4": { "Goksagun\\RateLimitBundle\\": "" },
+        "exclude-from-classmap": [
+            "/Tests/"
+        ]
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-master": "0.1.x-dev"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
