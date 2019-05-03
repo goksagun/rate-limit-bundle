@@ -4,13 +4,14 @@ namespace Goksagun\RateLimitBundle\RateLimit;
 
 class RateLimitInfo
 {
+    private $id;
     private $key;
     private $limit;
+    private $period;
     private $increment;
 
     private $dynamicLimit;
 
-    // Must be store
     private $calls;
     private $reset;
 
@@ -18,25 +19,38 @@ class RateLimitInfo
      * RateLimit constructor.
      * @param string $key
      * @param int $limit
+     * @param int $period
+     * @param int $increment
      * @param int $calls
-     * @param string $reset
-     * @param null $dynamicLimit
-     * @param int|null $increment
+     * @param int $reset
+     * @param int $dynamicLimit
      */
     public function __construct(
         string $key,
         int $limit,
+        int $period,
+        int $increment,
         int $calls,
-        string $reset,
-        $dynamicLimit = null,
-        $increment = null
+        int $reset,
+        int $dynamicLimit = 0
     ) {
         $this->key = $key;
         $this->limit = $limit;
+        $this->period = $period;
+        $this->increment = $increment;
         $this->calls = $calls;
         $this->reset = $reset;
         $this->dynamicLimit = $dynamicLimit;
-        $this->increment = $increment;
+
+        $this->setId();
+    }
+
+    /**
+     * @return string
+     */
+    public function getId(): string
+    {
+        return $this->id;
     }
 
     /**
@@ -78,18 +92,37 @@ class RateLimitInfo
     }
 
     /**
-     * @return null|int
+     * @return int
      */
-    public function getDynamicLimit()
+    public function getPeriod(): int
+    {
+        return $this->period;
+    }
+
+    /**
+     * @param int $period
+     * @return RateLimitInfo
+     */
+    public function setPeriod(int $period): RateLimitInfo
+    {
+        $this->period = $period;
+
+        return $this;
+    }
+
+    /**
+     * @return int
+     */
+    public function getDynamicLimit(): int
     {
         return $this->dynamicLimit;
     }
 
     /**
-     * @param null|int $dynamicLimit
+     * @param int $dynamicLimit
      * @return RateLimitInfo
      */
-    public function setDynamicLimit($dynamicLimit)
+    public function setDynamicLimit(int $dynamicLimit): RateLimitInfo
     {
         $this->dynamicLimit = $dynamicLimit;
 
@@ -97,22 +130,30 @@ class RateLimitInfo
     }
 
     /**
-     * @return null|int
+     * @return int
      */
-    public function getIncrement()
+    public function getIncrement(): int
     {
         return $this->increment;
     }
 
     /**
-     * @param null|int $increment
+     * @param int $increment
      * @return RateLimitInfo
      */
-    public function setIncrement($increment): RateLimitInfo
+    public function setIncrement(int $increment): RateLimitInfo
     {
         $this->increment = $increment;
 
         return $this;
+    }
+
+    /**
+     * @return bool
+     */
+    public function hasDynamicLimit(): bool
+    {
+        return $this->increment > 0;
     }
 
     /**
@@ -137,7 +178,7 @@ class RateLimitInfo
     /**
      * @return RateLimitInfo
      */
-    public function incrementCalls()
+    public function incrementCalls(): RateLimitInfo
     {
         ++$this->calls;
 
@@ -145,30 +186,32 @@ class RateLimitInfo
     }
 
     /**
-     * @return string
+     * @return int
      */
-    public function getReset(): string
+    public function getReset(): int
     {
         return $this->reset;
     }
 
     /**
-     * @return string
-     */
-    public function getResetDate(): string
-    {
-        return (new \DateTime())->setTimestamp($this->reset)->format('D, d M Y H:i:s O');
-    }
-
-    /**
-     * @param string $reset
+     * @param int $reset
      * @return RateLimitInfo
      */
-    public function setReset(string $reset): RateLimitInfo
+    public function setReset(int $reset): RateLimitInfo
     {
         $this->reset = $reset;
 
         return $this;
+    }
+
+    /**
+     * @param string $format
+     * @return string
+     * @throws \Exception
+     */
+    public function getResetDate(string $format = 'D, d M Y H:i:s O'): string
+    {
+        return (new \DateTime())->setTimestamp($this->reset)->format($format);
     }
 
     /**
@@ -180,14 +223,19 @@ class RateLimitInfo
     }
 
     /**
-     * @return int|null
+     * @return int
      */
-    public function getDynamicRemaining()
+    public function getDynamicRemaining(): int
     {
         if (!$this->dynamicLimit) {
-            return null;
+            return 0;
         }
 
         return $this->dynamicLimit - $this->calls;
+    }
+
+    private function setId()
+    {
+        $this->id = md5(implode(':', [$this->key, $this->limit, $this->period, $this->increment,]));
     }
 }

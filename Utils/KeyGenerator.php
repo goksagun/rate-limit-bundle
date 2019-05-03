@@ -13,6 +13,7 @@ class KeyGenerator
         }
 
         $path = trim($path, '/');
+        $path = str_replace('/', ':', $path);
         $methods = strtolower(implode(':', $methods));
 
         return trim(sprintf(static::RATE_KEY_LIMIT, $path, $methods), '.');

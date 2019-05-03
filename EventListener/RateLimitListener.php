@@ -13,17 +13,19 @@ use Symfony\Component\HttpKernel\Event\GetResponseEvent;
 class RateLimitListener
 {
     const RATE_FIELD_LIMIT = 'limit';
+    const RATE_FIELD_PERIOD = 'period';
+    const RATE_FIELD_INCREMENT = 'increment';
     const RATE_FIELD_RESET = 'reset';
     const RATE_FIELD_CALLS = 'calls';
     const RATE_FIELD_DYNAMIC_LIMIT = 'dynamic_limit';
-    const RATE_FIELD_DYNAMIC_LIMIT_INCREMENT = 'dynamic_limit_increment';
 
     private $config;
     private $client;
 
     private $uri;
     private $time;
-    private $rateLimit;
+
+    private $arrayCache = [];
 
     public function __construct(array $config, Client $client)
     {
@@ -60,12 +62,10 @@ class RateLimitListener
             return;
         }
 
-        if ($rateLimit->getIncrement()) {
-            if ($rateLimit->getDynamicLimit() <= $rateLimit->getCalls()) {
-                $this->setResponse($event);
+        if ($rateLimit->getIncrement() && $rateLimit->getDynamicLimit() <= $rateLimit->getCalls()) {
+            $this->setResponse($event);
 
-                return;
-            }
+            return;
         }
 
         $this->incrementAndStoreRateLimitCalls($rateLimit);
@@ -99,21 +99,32 @@ class RateLimitListener
 
     private function getRateLimit($key)
     {
+        if (array_key_exists(static::RATE_FIELD_LIMIT, $this->arrayCache)) {
+            return $this->arrayCache[static::RATE_FIELD_LIMIT];
+        }
+
         $data = $this->client->hgetall($key);
 
         if (array_key_exists(static::RATE_FIELD_LIMIT, $data)
+            && array_key_exists(static::RATE_FIELD_PERIOD, $data)
+            && array_key_exists(static::RATE_FIELD_INCREMENT, $data)
             && array_key_exists(static::RATE_FIELD_CALLS, $data)
             && array_key_exists(static::RATE_FIELD_RESET, $data)
             && array_key_exists(static::RATE_FIELD_DYNAMIC_LIMIT, $data)
         ) {
-            return $this->createRateLimit(
+            $rateLimit = $this->createRateLimit(
                 (string)$key,
                 (int)$data[static::RATE_FIELD_LIMIT],
+                (int)$data[static::RATE_FIELD_PERIOD],
+                (int)$data[static::RATE_FIELD_INCREMENT],
                 (int)$data[static::RATE_FIELD_CALLS],
-                (string)$data[static::RATE_FIELD_RESET],
-                $data[static::RATE_FIELD_DYNAMIC_LIMIT] ? (int)$data[static::RATE_FIELD_DYNAMIC_LIMIT] : null,
-                $data[static::RATE_FIELD_DYNAMIC_LIMIT_INCREMENT] ? (int)$data[static::RATE_FIELD_DYNAMIC_LIMIT_INCREMENT] : null
+                (int)$data[static::RATE_FIELD_RESET],
+                (int)$data[static::RATE_FIELD_DYNAMIC_LIMIT]
             );
+
+            $this->arrayCache[static::RATE_FIELD_LIMIT] = $rateLimit;
+
+            return $rateLimit;
         }
 
         return null;
@@ -122,14 +133,11 @@ class RateLimitListener
     private function storeRateLimit(RateLimitInfo $rateLimit)
     {
         $this->client->hset($rateLimit->getKey(), static::RATE_FIELD_LIMIT, $rateLimit->getLimit());
+        $this->client->hset($rateLimit->getKey(), static::RATE_FIELD_PERIOD, $rateLimit->getPeriod());
+        $this->client->hset($rateLimit->getKey(), static::RATE_FIELD_INCREMENT, $rateLimit->getIncrement());
         $this->client->hset($rateLimit->getKey(), static::RATE_FIELD_CALLS, $rateLimit->getCalls());
         $this->client->hset($rateLimit->getKey(), static::RATE_FIELD_RESET, $rateLimit->getReset());
         $this->client->hset($rateLimit->getKey(), static::RATE_FIELD_DYNAMIC_LIMIT, $rateLimit->getDynamicLimit());
-        $this->client->hset(
-            $rateLimit->getKey(),
-            static::RATE_FIELD_DYNAMIC_LIMIT_INCREMENT,
-            $rateLimit->getIncrement()
-        );
     }
 
     private function incrementRateLimitCalls(RateLimitInfo $rateLimit)
@@ -140,12 +148,13 @@ class RateLimitListener
     private function createRateLimit(
         string $key,
         int $limit,
+        int $period,
+        int $increment,
         int $calls,
-        string $reset,
-        $dynamicLimit = null,
-        $increment = null
+        int $reset,
+        int $dynamicLimit = 0
     ) {
-        return new RateLimitInfo($key, $limit, $calls, $reset, $dynamicLimit, $increment);
+        return new RateLimitInfo($key, $limit, $period, $increment, $calls, $reset, $dynamicLimit);
     }
 
     private function incrementAndStoreRateLimitCalls(RateLimitInfo $rateLimit)
@@ -157,48 +166,48 @@ class RateLimitListener
 
     private function getOrNewRateLimit(string $key)
     {
-        if ($this->rateLimit) {
-            return $this->rateLimit;
-        }
-
         $rateLimit = $this->getRateLimit($key);
 
-        // Create rate limit
-        if (!$rateLimit instanceof RateLimitInfo) {
+        $proxyRateLimit = $this->createRateLimit(
+            $key,
+            $this->uri['limit'],
+            $this->uri['period'],
+            $this->uri['increment'],
+            0,
+            $this->time + $this->uri['period'],
+            $this->uri['increment']
+        );
+
+        // Create rate limit if there is none or changed config parameters
+        if (null === $rateLimit || $rateLimit->getId() !== $proxyRateLimit->getId()) {
             $rateLimit = $this->createRateLimit(
                 $key,
                 $this->uri['limit'],
+                $this->uri['period'],
+                $this->uri['increment'],
                 0,
                 $this->time + $this->uri['period'],
-                $this->uri['increment'],
                 $this->uri['increment']
             );
 
             $this->storeRateLimit($rateLimit);
         } // Period end re-create rate limit
         elseif ($this->time >= $rateLimit->getReset()) {
-            $calls = $rateLimit->getCalls();
+            $dynamicLimit = 0;
 
-            $dynamicLimit = $this->uri['increment'] ? $this->uri['increment'] + $calls : null;
+            if ($rateLimit->hasDynamicLimit()) {
+                $dynamicLimit = $rateLimit->getIncrement() + $rateLimit->getCalls();
 
-            if ($dynamicLimit && $dynamicLimit > $this->uri['limit']) {
-                $dynamicLimit = $this->uri['limit'];
+                if ($dynamicLimit > $rateLimit->getLimit()) {
+                    $dynamicLimit = $rateLimit->getLimit();
+                }
             }
 
-            $rateLimit = $this->createRateLimit(
-                $key,
-                $this->uri['limit'],
-                0,
-                $this->time + $this->uri['period'],
-                $dynamicLimit,
-                $this->uri['increment']
-            );
+            $rateLimit->setCalls(0);
+            $rateLimit->setReset($this->time + $rateLimit->getPeriod());
+            $rateLimit->setDynamicLimit($dynamicLimit);
 
             $this->storeRateLimit($rateLimit);
-        }
-
-        if (!$this->rateLimit) {
-            $this->rateLimit = $rateLimit;
         }
 
         return $rateLimit;
@@ -230,7 +239,7 @@ class RateLimitListener
             $headers['X-RateLimit-Reset-Date'] = $rateLimit->getResetDate();
         }
 
-        if ($rateLimit->getDynamicLimit()) {
+        if ($rateLimit->hasDynamicLimit()) {
             $headers['X-RateLimit-Limit'] = $rateLimit->getDynamicLimit();
             $headers['X-RateLimit-Remaining'] = $rateLimit->getDynamicRemaining();
         }

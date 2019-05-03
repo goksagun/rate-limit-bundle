@@ -66,7 +66,7 @@ class Configuration implements ConfigurationInterface
                             ->end()
                             ->integerNode('limit')->isRequired()->min(0)->end()
                             ->integerNode('period')->isRequired()->min(0)->end()
-                            ->integerNode('increment')->defaultValue(null)->min(0)->end()
+                            ->integerNode('increment')->defaultValue(0)->min(0)->end()
                         ->end()
                     ->end()
                 ->end()
