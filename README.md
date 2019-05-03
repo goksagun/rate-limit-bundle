@@ -40,3 +40,25 @@ class AppKernel extends Kernel
     // ...
 }
 ```
+
+Step 3: Add the Bundle config file (for symfony version 2, 3)
+----------------------------------
+
+Then, add the bundle configuration yml file `rate_limit.yml` into 
+`app/config` directory:
+
+```yml
+rate_limit:
+    enabled: true
+    paths:
+         - { path: /limit, limit: 100, period: 60 }
+         - { path: /limit-dynamic-increment, limit: 1000, period: 60, increment: 10 }
+```
+
+Import new config file to `config.yml` into `app/config` directory:
+
+```yml
+imports:
+    ...
+    - { resource: rate_limit.yml }
+```

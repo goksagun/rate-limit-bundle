@@ -1,3 +1,0 @@
-rate_limit_homepage:
-    path:     /
-    defaults: { _controller: RateLimitBundle:Default:index }

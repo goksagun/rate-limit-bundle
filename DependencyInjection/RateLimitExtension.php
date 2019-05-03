@@ -24,5 +24,8 @@ class RateLimitExtension extends Extension
 
         $loader = new Loader\YamlFileLoader($container, new FileLocator(__DIR__.'/../Resources/config'));
         $loader->load('services.yml');
+
+        $rateLimitListenerDefinition = $container->getDefinition('rate_limit.listener.rate_limit');
+        $rateLimitListenerDefinition->replaceArgument(0, $config);
     }
 }

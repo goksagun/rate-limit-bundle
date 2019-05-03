@@ -1,0 +1,4 @@
+rate_limit:
+    enabled: true
+    paths:
+        #- { path: /api, limit: 1000, period: 3600 }

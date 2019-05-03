@@ -17,6 +17,7 @@
         "symfony/framework-bundle": "~2.7|~3.0|~4.0"
     },
     "require-dev": {
+        "predis/predis": "^0.8|^1.1",
         "symfony/phpunit-bridge": "*"
     },
     "autoload": {
