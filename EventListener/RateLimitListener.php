@@ -189,6 +189,21 @@ class RateLimitListener
 
         // Create rate limit if there is none or changed config parameters
         if (null === $rateLimit || $rateLimit->getId() !== $proxyRateLimit->getId()) {
+            $dynamicLimit = 0;
+
+            if ($this->uri['increment'] > 0) {
+                $dynamicLimit = $this->uri['increment'];
+
+                $rules = $this->uri['rules'];
+                if ($increment = RateLimitService::matchIncrement($rules, 0)) {
+                    $dynamicLimit = $increment;
+                }
+
+                if ($dynamicLimit > $this->uri['limit']) {
+                    $dynamicLimit = $this->uri['limit'];
+                }
+            }
+
             $rateLimit = $this->createRateLimit(
                 $key,
                 $this->uri['limit'],
@@ -197,7 +212,7 @@ class RateLimitListener
                 $this->uri['rules'],
                 0,
                 $this->time + $this->uri['period'],
-                $this->uri['increment']
+                $dynamicLimit
             );
 
             $this->storeRateLimit($rateLimit);
