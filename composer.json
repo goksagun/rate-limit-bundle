@@ -9,7 +9,7 @@
         }
     ],
     "keywords": [
-        "scheduler task bundle"
+        "rate-limit bundle"
     ],
     "license": "MIT",
     "require": {
