@@ -3,6 +3,7 @@
 namespace Goksagun\RateLimitBundle\EventListener;
 
 use Goksagun\RateLimitBundle\RateLimit\RateLimitInfo;
+use Goksagun\RateLimitBundle\Service\RateLimitService;
 use Goksagun\RateLimitBundle\Utils\KeyGenerator;
 use Goksagun\RateLimitBundle\Utils\RequestProcessor;
 use Predis\Client;
@@ -15,6 +16,9 @@ class RateLimitListener
     const RATE_FIELD_LIMIT = 'limit';
     const RATE_FIELD_PERIOD = 'period';
     const RATE_FIELD_INCREMENT = 'increment';
+    const RATE_FIELD_RULES = 'rules';
+    const RATE_FIELD_RULES_MIN = 0;
+    const RATE_FIELD_RULES_MAX = 99999999;
     const RATE_FIELD_RESET = 'reset';
     const RATE_FIELD_CALLS = 'calls';
     const RATE_FIELD_DYNAMIC_LIMIT = 'dynamic_limit';
@@ -108,6 +112,7 @@ class RateLimitListener
         if (array_key_exists(static::RATE_FIELD_LIMIT, $data)
             && array_key_exists(static::RATE_FIELD_PERIOD, $data)
             && array_key_exists(static::RATE_FIELD_INCREMENT, $data)
+            && array_key_exists(static::RATE_FIELD_RULES, $data)
             && array_key_exists(static::RATE_FIELD_CALLS, $data)
             && array_key_exists(static::RATE_FIELD_RESET, $data)
             && array_key_exists(static::RATE_FIELD_DYNAMIC_LIMIT, $data)
@@ -117,6 +122,7 @@ class RateLimitListener
                 (int)$data[static::RATE_FIELD_LIMIT],
                 (int)$data[static::RATE_FIELD_PERIOD],
                 (int)$data[static::RATE_FIELD_INCREMENT],
+                (array)unserialize($data[static::RATE_FIELD_RULES]),
                 (int)$data[static::RATE_FIELD_CALLS],
                 (int)$data[static::RATE_FIELD_RESET],
                 (int)$data[static::RATE_FIELD_DYNAMIC_LIMIT]
@@ -135,6 +141,7 @@ class RateLimitListener
         $this->client->hset($rateLimit->getKey(), static::RATE_FIELD_LIMIT, $rateLimit->getLimit());
         $this->client->hset($rateLimit->getKey(), static::RATE_FIELD_PERIOD, $rateLimit->getPeriod());
         $this->client->hset($rateLimit->getKey(), static::RATE_FIELD_INCREMENT, $rateLimit->getIncrement());
+        $this->client->hset($rateLimit->getKey(), static::RATE_FIELD_RULES, serialize($rateLimit->getRules()));
         $this->client->hset($rateLimit->getKey(), static::RATE_FIELD_CALLS, $rateLimit->getCalls());
         $this->client->hset($rateLimit->getKey(), static::RATE_FIELD_RESET, $rateLimit->getReset());
         $this->client->hset($rateLimit->getKey(), static::RATE_FIELD_DYNAMIC_LIMIT, $rateLimit->getDynamicLimit());
@@ -150,11 +157,12 @@ class RateLimitListener
         int $limit,
         int $period,
         int $increment,
+        array $rules,
         int $calls,
         int $reset,
         int $dynamicLimit = 0
     ) {
-        return new RateLimitInfo($key, $limit, $period, $increment, $calls, $reset, $dynamicLimit);
+        return new RateLimitInfo($key, $limit, $period, $increment, $rules, $calls, $reset, $dynamicLimit);
     }
 
     private function incrementAndStoreRateLimitCalls(RateLimitInfo $rateLimit)
@@ -173,6 +181,7 @@ class RateLimitListener
             $this->uri['limit'],
             $this->uri['period'],
             $this->uri['increment'],
+            $this->uri['rules'],
             0,
             $this->time + $this->uri['period'],
             $this->uri['increment']
@@ -185,6 +194,7 @@ class RateLimitListener
                 $this->uri['limit'],
                 $this->uri['period'],
                 $this->uri['increment'],
+                $this->uri['rules'],
                 0,
                 $this->time + $this->uri['period'],
                 $this->uri['increment']
@@ -197,6 +207,11 @@ class RateLimitListener
 
             if ($rateLimit->hasDynamicLimit()) {
                 $dynamicLimit = $rateLimit->getIncrement() + $rateLimit->getCalls();
+
+                $rules = $rateLimit->getRules();
+                if ($increment = RateLimitService::matchIncrement($rules, $rateLimit->getCalls())) {
+                    $dynamicLimit = $increment + $rateLimit->getCalls();
+                }
 
                 if ($dynamicLimit > $rateLimit->getLimit()) {
                     $dynamicLimit = $rateLimit->getLimit();

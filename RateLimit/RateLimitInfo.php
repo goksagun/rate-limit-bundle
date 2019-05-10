@@ -9,6 +9,7 @@ class RateLimitInfo
     private $limit;
     private $period;
     private $increment;
+    private $rules;
 
     private $dynamicLimit;
 
@@ -21,6 +22,7 @@ class RateLimitInfo
      * @param int $limit
      * @param int $period
      * @param int $increment
+     * @param array $rules
      * @param int $calls
      * @param int $reset
      * @param int $dynamicLimit
@@ -30,6 +32,7 @@ class RateLimitInfo
         int $limit,
         int $period,
         int $increment,
+        array $rules,
         int $calls,
         int $reset,
         int $dynamicLimit = 0
@@ -38,6 +41,7 @@ class RateLimitInfo
         $this->limit = $limit;
         $this->period = $period;
         $this->increment = $increment;
+        $this->rules = $rules;
         $this->calls = $calls;
         $this->reset = $reset;
         $this->dynamicLimit = $dynamicLimit;
@@ -157,6 +161,25 @@ class RateLimitInfo
     }
 
     /**
+     * @return array
+     */
+    public function getRules(): array
+    {
+        return $this->rules;
+    }
+
+    /**
+     * @param array $rules
+     * @return RateLimitInfo
+     */
+    public function setRules($rules): RateLimitInfo
+    {
+        $this->rules = $rules;
+
+        return $this;
+    }
+
+    /**
      * @return int
      */
     public function getCalls(): int
@@ -236,6 +259,6 @@ class RateLimitInfo
 
     private function setId()
     {
-        $this->id = md5(implode(':', [$this->key, $this->limit, $this->period, $this->increment,]));
+        $this->id = md5(implode(':', [$this->key, $this->limit, $this->period, $this->increment, serialize($this->rules)]));
     }
 }
